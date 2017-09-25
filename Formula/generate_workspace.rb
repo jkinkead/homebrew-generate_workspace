@@ -9,12 +9,49 @@ class GenerateWorkspace < Formula
   depends_on 'bazel' => :build
 
   def install
-    system 'bazel', 'build', 'generate_workspace'
-    bin.install 'bazel-bin/generate_workspace/generate_workspace' => 'generate_workspace'
+    # Build the deploy jar, so that we have an item to copy out.
+    system 'bazel', 'build', 'generate_workspace:generate_workspace_deploy.jar'
+    # This must have the same prefix as the deploy jar. We leave it the same for simplicity.
+    libexec.install 'bazel-bin/generate_workspace/generate_workspace' => 'generate_workspace'
+    libexec.install 'bazel-bin/generate_workspace/generate_workspace_deploy.jar' => 'generate_workspace_deploy.jar'
+
+    # Generate a wrapper script that actually works.
+    wrapper = libexec/'generate_workspace_wrapper.sh'
+    wrapper.write <<-EOS.undent
+      #!/bin/bash --posix
+
+      # Suppress looking for runfiles. This is required for --singlejar to work.
+      export JAVA_RUNFILES=1
+      # Set JAVABIN to system java.
+      if [[ -e "$JAVA_HOME/bin/java" ]]; then
+        export JAVABIN="$JAVA_HOME/bin/java"
+      else
+        export JAVABIN=$(which java)
+      fi
+
+      # Resolve all symlinks.
+      SCRIPT="$0"
+      while true; do
+        if [[ ! -L "$SCRIPT" ]]; then
+          break
+        fi
+        readlink="$(readlink "$SCRIPT")"
+        if [[ "$readlink" = /* ]]; then
+          SCRIPT="$readlink"
+        else
+          # resolve relative symlink
+          SCRIPT="${SCRIPT%/*}/$readlink"
+        fi
+      done
+      TARGET=$(dirname $SCRIPT)/generate_workspace
+      exec "$TARGET" --singlejar "${ARGS[@]}"
+    EOS
+    system 'chmod', '+x', wrapper
+    # Symlink the wrapper as the main name.
+    bin.install_symlink wrapper => 'generate_workspace'
   end
 
   test do
-    ENV['JAVA_RUNFILES'] = 0
     system 'generate_workspace'
   end
 end
