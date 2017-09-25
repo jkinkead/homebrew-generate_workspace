@@ -5,8 +5,10 @@ class GenerateWorkspace < Formula
   url 'https://github.com/bazelbuild/migration-tooling.git',
       :revision => 'cc88b8da996c222a3819aa006e795b68dbe983bd'
   revision 1
+  version '0.0.2'
 
   depends_on 'bazel' => :build
+  depends_on :java
 
   def install
     # Build the deploy jar, so that we have an item to copy out.
@@ -46,12 +48,12 @@ class GenerateWorkspace < Formula
       TARGET=$(dirname $SCRIPT)/generate_workspace
       exec "$TARGET" --singlejar "${ARGS[@]}"
     EOS
-    system 'chmod', '+x', wrapper
+    wrapper.chmod(0755)
     # Symlink the wrapper as the main name.
     bin.install_symlink wrapper => 'generate_workspace'
   end
 
   test do
-    system 'generate_workspace'
+    system '#{bin}/generate_workspace'
   end
 end
